@@ -1,0 +1,21 @@
+{
+    "name": "lightszentip/viessmannapi",
+    "description": "Connection to viessmann api",
+    "type": "library",
+    "license": "MIT",
+    "autoload": {
+        "psr-4": {
+            "Lightszentip\\Viessmannapi\\": "src/"
+        }
+    },
+    "authors": [
+        {
+            "name": "Tobi",
+            "email": "lightszentip@gmail.com"
+        }
+    ],
+    "require": {
+        "ext-curl": "*",
+        "ext-dom": "*"
+    }
+}
