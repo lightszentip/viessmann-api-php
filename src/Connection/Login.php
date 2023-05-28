@@ -4,6 +4,7 @@ namespace Lightszentip\Viessmannapi\Connection;
 
 use DOMDocument;
 use DOMXPath;
+use Exception;
 
 class Login
 {
@@ -13,24 +14,26 @@ class Login
     private string $codeChallenge;
     private string $filePathCredentials;
     private string $accessToken;
+    private string $clientId;
+    private string $installationId;
+    private string $gatewayId;
 
-    private string $generatedToken;
+    private string $deviceId = "0"; //TODO implement https://api.viessmann.com/iot/v1/equipment/installations/{installationId}/gateways/{gatewaySerial}/devices to get the device ids
 
     function randomString()
     {
         $randomString = bin2hex(random_bytes(10));
-        $this->codeChallenge = $randomString;
+        $this->codeChallenge = hash("SHA256",$randomString);
     }
 
     /**
-     * @throws \Exception
+     * @throws Exception
      */
     function __construct(string $filePath)
     {
         $this->filePathCredentials = $filePath;
-        $this->generateToken();
+        $this->setupLogin();
     }
-
 
 
     /**
@@ -82,7 +85,7 @@ class Login
         // Code Request Settings
         $parameters = array(
             'client_id' => $credentials["client_id"],
-            'code_challenge' => $credentials["code_challenge"],
+            'code_challenge' => $this->codeChallenge,
             'scope' => 'IoT%20User',
             'redirect_uri' => $credentials["callback_uri"],
             'response_type' => 'code',
@@ -104,7 +107,7 @@ class Login
 
         $parameters = array(
             'client_id' => $credentials["client_id"],
-            'code_verifier' => $credentials["code_challenge"],
+            'code_verifier' => $this->codeChallenge,
             'grant_type' => 'authorization_code',
             'redirect_uri' => $credentials["callback_uri"],
         );
@@ -118,31 +121,7 @@ class Login
         return $generateTokenUrl;
     }
 
-    /**
-     * @return void
-     */
-    public function readUserData(): void
-    {
-        $url = "https://api.viessmann.com/users/v1/users/me?sections=identity";
-        $header = array("Authorization: Bearer $this->accessToken");
 
-        $curlOptions = array(
-            CURLOPT_URL => $url,
-            CURLOPT_HTTPHEADER => $header,
-            CURLOPT_SSL_VERIFYPEER => false,
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_HTTPAUTH => CURLAUTH_BASIC,
-        );
-
-// Data Curl Call
-//
-        $curl = curl_init();
-        curl_setopt_array($curl, $curlOptions);
-        $response = curl_exec($curl);
-        curl_close($curl);
-
-        echo($response);
-    }
 
     /**
      * @param string $generateTokenUrl
@@ -172,11 +151,14 @@ class Login
     /**
      * @param string $filePath
      * @return void
-     * @throws \Exception
+     * @throws Exception
      */
-    private function generateToken(): void
+    private function setupLogin(): void
     {
         $credentials = parse_ini_file(__DIR__ . DIRECTORY_SEPARATOR . ".." . DIRECTORY_SEPARATOR . ".." . DIRECTORY_SEPARATOR . $this->filePathCredentials . "/credentials.properties");
+        $this->clientId = $credentials["client_id"];
+        $this->installationId = $credentials["installationId"];
+        $this->gatewayId = $credentials["gatewayId"];
         $generateAuthorizeUrl = $this->getUrl($credentials);
         $header = array("Content-Type: application/x-www-form-urlencoded");
 
@@ -195,14 +177,54 @@ class Login
         curl_close($curl);
 
         $code = $this->findCodeInHtml($response);
-        if ($code == "") throw new \Exception("Code not found");
+        if ($code == "") throw new Exception("Code not found");
 
-        $this->generatedToken = $this->getGenerateTokenUrl($credentials, $code);
+        $generateTokenUrl = $this->getGenerateTokenUrl($credentials, $code);
 
-        $json = $this->getToken($this->generatedToken, $header);
+        $json = $this->getToken($generateTokenUrl, $header);
 
-        if (array_key_exists('error',$json)) throw new \Exception("Error found in token".$json['error']);
+        if (array_key_exists('error', $json)) throw new Exception("Error found in token" . $json['error']);
         $this->accessToken = $json['access_token'];
+    }
+
+    /**
+     * @return string
+     */
+    public function getAccessToken(): string
+    {
+        return $this->accessToken;
+    }
+
+    /**
+     * @return string
+     */
+    public function getInstallationId(): string
+    {
+        return $this->installationId;
+    }
+
+    /**
+     * @return string
+     */
+    public function getClientId(): string
+    {
+        return $this->clientId;
+    }
+
+    /**
+     * @return string
+     */
+    public function getGatewayId(): string
+    {
+        return $this->gatewayId;
+    }
+
+    /**
+     * @return string
+     */
+    public function getDeviceId(): string
+    {
+        return $this->deviceId;
     }
 
 }
